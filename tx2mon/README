@@ -1,0 +1,19 @@
+tx2mon - monitor ThunderX2 temperature, frequency and power
+
+tx2mon decodes and displays the operating region of the SoC management
+controller(MC). The display shows the current temperature from sensors, the
+frequencies and the power measurements that is logged by the MC to host
+memory.
+
+To use tx2mon, you will need to install the corresponding kernel module
+'tx2mon_kmod'. The kernel module maps the operating region to sysfs files
+that are decoded by 'tx2mon' userspace application.
+
+Usage: tx2mon [-d delay] [-f file] [-h]
+Options:
+ -d delay	update delay in seconds
+ -f csv_file	run in non-interactive mode, save data in CSV format to
+		the file specified
+ -h		display help text
+
+You have to run the application as root.
