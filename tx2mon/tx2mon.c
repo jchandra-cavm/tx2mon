@@ -28,6 +28,7 @@
 
 static struct termios *ts_saved;
 static int interactive = 1;
+static char *out_filename;
 static int delay = 1;
 
 static struct term_seq {
@@ -50,6 +51,10 @@ struct tx2mon {
 	struct	node_data node[2];
 };
 static struct tx2mon *tx2mon;
+
+static void cleanup(void);
+static int fail(char *str);
+static int fail_err(char *str, int err);
 
 static inline double cpu_temp(struct node_data *d, int c)
 {
@@ -76,7 +81,7 @@ static void clearscreen(void)
 	printf("%s", term_seq.cl);
 }
 
-static int term_init_save(void)
+static void term_init_save(void)
 {
 	static struct termios nts;
 	char buf[1024];
@@ -84,22 +89,28 @@ static int term_init_save(void)
 	if (!isatty(1)) {
 		term_seq.cl = "";
 		term_seq.nl = "\n";
-		return 0;
+		return;
 	}
 	ts_saved = malloc(sizeof(*ts_saved));
 	if (tcgetattr(0, ts_saved) < 0)
-		return errno;
+		goto fail;
 
 	nts = *ts_saved;
 	nts.c_lflag &= ~(ICANON | ECHO);
 	nts.c_cc[VMIN] = 1;
 	nts.c_cc[VTIME] = 0;
 	if (tcsetattr (0, TCSANOW, &nts) < 0)
-		return errno;
+		goto fail;
 	tgetent(buf, getenv("TERM"));
 	term_seq.cl = tgetstr("cl", NULL);
 	term_seq.nl = "\r\n";
-	return 0;
+	return;
+fail:
+	if (ts_saved) {
+		free(ts_saved);
+		ts_saved = NULL;
+	}
+	fail_err("Setting up terminal failed", errno);
 }
 
 static void term_restore(void)
@@ -189,14 +200,14 @@ void screen_disp_node(struct node_data *d)
 	}
 	printf("%s", t->nl);
 	printf("SOC Center Temp: %6.2f C%s", to_c(op->tmon_soc_avg), t->nl);
-	printf("Frequency    Memnet: %4d MHz, SOCS: %4d MHZ, SOCN: %4d MHz%s",
-		op->freq_mem_net, op->freq_socs, op->freq_socn, t->nl);
 	printf("Voltage    Core: %6.2f V, SRAM: %5.2f V,  Mem: %5.2f V, SOC: %5.2f V%s",
 		to_v(op->v_core), to_v(op->v_sram), to_v(op->v_mem),
 		to_v(op->v_soc), t->nl);
 	printf("Power      Core: %6.2f W, SRAM: %5.2f W,  Mem: %5.2f W, SOC: %5.2f W%s",
 		to_w(op->pwr_core), to_w(op->pwr_sram), to_w(op->pwr_mem),
 		to_w(op->pwr_soc), t->nl);
+	printf("Frequency    Memnet: %4d MHz, SOCS: %4d MHz, SOCN: %4d MHz%s",
+		op->freq_mem_net, op->freq_socs, op->freq_socn, t->nl);
 	printf("%s", t->nl);
 }
 
@@ -224,34 +235,37 @@ int read_node(struct node_data *d)
 	return 1;
 }
 
-void cleanup(void)
+static void cleanup(void)
 {
 	if (interactive)
 		term_restore();
-	else
-		fclose(tx2mon->fileout);
+	else {
+		free(out_filename);
+		if (tx2mon->fileout)
+			fclose(tx2mon->fileout);
+	}
+
 	close(tx2mon->node[0].fd);
 	if (tx2mon->nodes > 1)
 		close(tx2mon->node[1].fd);
 	free(tx2mon);
-	exit(0);
 }
 
-int fail(char *str)
+static int fail(char *str)
 {
 	fprintf(stderr, "%s\n", str);
 	cleanup();
 	exit(1);
 }
 
-int fail_err(char *str, int err)
+static int fail_err(char *str, int err)
 {
 	fprintf(stderr, "%s : %s\n", str, strerror(err));
 	cleanup();
 	exit(1);
 }
 
-void handle_input(void)
+static void handle_input(void)
 {
 	int c;
 
@@ -260,7 +274,7 @@ void handle_input(void)
 	       tx2mon->stop = 1;
 }
 
-void display_loop(void)
+static void display_loop(void)
 {
 	struct term_seq *t = &term_seq;
 	fd_set rdfds;
@@ -316,15 +330,15 @@ static void usage(const char *prog, int exit_code)
 	exit(exit_code);
 }
 
-static void setup_fileout(const char *fn)
+static void setup_fileout(void)
 {
 	FILE *fp;
 
-	fp = fopen(fn, "w+");
+	fp = fopen(out_filename, "w+");
 	if (fp == NULL)
 		fail_err("Cannot open csv file!", errno);
 	tx2mon->fileout = fp;
-	interactive = 0;
+	/* TODO print CSV header */
 }
 
 int main(int argc, char *argv[])
@@ -349,7 +363,8 @@ int main(int argc, char *argv[])
 
 			break;
 		case 'f':
-			setup_fileout(optarg);
+			out_filename = strdup(optarg);
+			interactive = 0;
 			break;
 		default:
 			usage(argv[0], 1);
@@ -366,7 +381,7 @@ int main(int argc, char *argv[])
 		fail_err("Reading node0 entry", errno);
 	tx2mon->node[0].fd = fd;
 
-	if (tx2mon->nodes > 0) {
+	if (tx2mon->nodes > 1) {
 		fd = open(PATH_T99MON_NODE1, O_RDONLY);
 		if (fd < 0)
 			fail_err("Reading node1 entry", errno);
@@ -379,6 +394,8 @@ int main(int argc, char *argv[])
 
 	if (interactive)
 		term_init_save();
+	else
+		setup_fileout();
 	display_loop();
 	if (!interactive)
 		printf("\n%d samples saved.\n", tx2mon->samples);

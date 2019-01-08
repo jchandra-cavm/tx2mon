@@ -1,5 +1,5 @@
 CC	:= gcc
-CFLAGS	:= -Wall -g
+CFLAGS	:= -Werror -Wall -g -O2
 LDFLAGS	:= -ltermcap
 
 SRCS = tx2mon.c
