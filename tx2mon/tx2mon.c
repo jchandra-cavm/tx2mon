@@ -29,7 +29,7 @@
 static struct termios *ts_saved;
 static int interactive = 1;
 static char *out_filename;
-static int delay = 1;
+static struct timeval delay = { .tv_sec = 1 };
 
 static struct term_seq {
 	char *cl;
@@ -285,8 +285,7 @@ static void display_loop(void)
 	FD_ZERO(&rdfds);
 	nfds = interactive ? 1 : 0;
 	while (1) {
-		tv.tv_sec = delay;
-		tv.tv_usec = 0;
+		tv = delay;
 		if (interactive)
 			FD_SET(0, &rdfds);
 		ret = select(nfds, &rdfds, NULL, NULL, &tv);
@@ -332,19 +331,36 @@ static void usage(const char *prog, int exit_code)
 
 static void setup_fileout(void)
 {
-	FILE *fp;
+	struct node_data *nd;
+	FILE *of;
+	int c, n;
 
-	fp = fopen(out_filename, "w+");
-	if (fp == NULL)
+	of = fopen(out_filename, "w+");
+	if (of == NULL)
 		fail_err("Cannot open csv file!", errno);
-	tx2mon->fileout = fp;
-	/* TODO print CSV header */
+	tx2mon->fileout = of;
+
+	printf("Saving to %s, use INTR key to stop.\n",
+		out_filename);
+	for (n = 0; n < tx2mon->nodes; n++) {
+		nd = &tx2mon->node[n];
+		if (n == 1)
+			fprintf(of, ",");
+		for (c = 0; c < nd->cores; c++)
+			fprintf(of, "cpu_temp%dc%d,cpu_freq%dc%d,", n, c, n, c);
+		fprintf(of, "tmon_soc_avg%d,", n);
+		fprintf(of, "freq_mem_net%d,freq_socs%d,freq_socn%d,", n, n, n);
+		fprintf(of, "v_core%d,v_sram%d,v_mem%d,v_soc%d,", n, n, n, n);
+		fprintf(of, "pwr_core%d,pwr_sram%d,pwr_mem%d,pwr_soc%d", n, n, n, n);
+	}
+	fprintf(of, "\n");
 }
 
 int main(int argc, char *argv[])
 {
-	int ret, opt;
+	int opt, ret;
 	int fd;
+	double dval;
 
 	tx2mon = malloc(sizeof(*tx2mon));
 	while ((opt = getopt(argc, argv, "f:d:h")) != -1) {
@@ -353,11 +369,12 @@ int main(int argc, char *argv[])
 			usage(argv[0], 0);
 			break;
 		case 'd':
-			ret = atoi(optarg);
-			if (ret > 0 && ret < 9999) {
-				delay = ret;
+			dval = atof(optarg);
+			if (dval >= 0.0001 && dval <= 9999.0) {
+				delay.tv_sec = dval;
+				delay.tv_usec = 1000000 * (dval - delay.tv_sec);
 			} else {
-				fprintf(stderr, "Bad delay %d!\n", ret);
+				fprintf(stderr, "Bad delay %f!- allowed range [0.0001..9999]\n", dval);
 				usage(argv[0], 1);
 			}
 

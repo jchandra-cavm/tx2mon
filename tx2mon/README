@@ -11,7 +11,7 @@ that are decoded by 'tx2mon' userspace application.
 
 Usage: tx2mon [-d delay] [-f file] [-h]
 Options:
- -d delay	update delay in seconds
+ -d delay	update delay in seconds - range [0.0001..9999]
  -f csv_file	run in non-interactive mode, save data in CSV format to
 		the file specified
  -h		display help text
