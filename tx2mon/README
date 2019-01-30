@@ -17,3 +17,21 @@ Options:
  -h		display help text
 
 You have to run the application as root.
+
+
+The following items are reported by this tool:
+ Freq (Min/Max)		: SOC frequency limits, these limits depend on the SKU used
+ Temp Thresh (Soft/Max) : Limits on temperature beyong which the SOC will throttle voltage and frequency down
+ For each core 		: Frequency and Temperature reading
+ SOC Center Temp	: This represents the highest temperature on the SOC
+ Voltage and power for the following
+	Core : Voltage and power consumed by all cores on the SOC
+	SRAM : Voltage and power consumed by internal SRAM on the SOC
+	Mem  : Voltage and power consumed by the LLC ring on the SOC, refer to ThunderX2 HRM for details on the SOC architecture
+	SOC  : Voltage and power consumed by misc SOC blocks 
+	* There is additional power consumed by cross socket interconnect, PCIe and DDR IOs which will be reported in a future version of this tool
+ Other information
+	Memnet Frequency: Frequency used by the ring connecting the SOC, refer to ThunderX2 HRM for details on the SOC architecture
+
+
+

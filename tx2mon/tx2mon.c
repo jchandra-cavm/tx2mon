@@ -206,8 +206,8 @@ void screen_disp_node(struct node_data *d)
 	printf("Power      Core: %6.2f W, SRAM: %5.2f W,  Mem: %5.2f W, SOC: %5.2f W%s",
 		to_w(op->pwr_core), to_w(op->pwr_sram), to_w(op->pwr_mem),
 		to_w(op->pwr_soc), t->nl);
-	printf("Frequency    Memnet: %4d MHz, SOCS: %4d MHz, SOCN: %4d MHz%s",
-		op->freq_mem_net, op->freq_socs, op->freq_socn, t->nl);
+	printf("Memnet Frequency: %4d MHzi%s",
+		op->freq_mem_net, t->nl);
 	printf("%s", t->nl);
 }
 
