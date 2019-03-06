@@ -34,6 +34,7 @@
 static struct termios *ts_saved;
 static int interactive = 1;
 static int display_extra = 0;
+static int display_throttling = 1;
 static char *out_filename;
 static struct timeval delay = { .tv_sec = 1 };
 
@@ -43,10 +44,11 @@ static struct term_seq {
 } term_seq;
 
 struct node_data {
-	int	fd;
-	int	cores;
-	int	node;
-	struct	mc_oper_region buf;
+	int		fd;
+	int		cores;
+	int		node;
+	struct		mc_oper_region buf;
+	unsigned int	throttling_available:1;
 };
 
 struct tx2mon {
@@ -164,6 +166,31 @@ static int init_socinfo(void)
 	return 0;
 }
 
+static char *get_throttling_cause(unsigned int active_event, const char *sep, char *buf,
+		int bufsz)
+{
+	const char *causes[] = { "Temp", "Power", "Ext", "Unk3", "Unk4", "Unk5"};
+	const int ncauses = sizeof(causes)/sizeof(causes[0]);
+	int i, sz, events;
+	char *rbuf;
+
+	rbuf = buf;
+	if (active_event == 0) {
+		snprintf(buf, bufsz, "None");
+		return rbuf;
+	}
+
+	for (i = 0, events = 0; i < ncauses && bufsz > 0; i++) {
+		if ((active_event & (1 << i)) == 0)
+			continue;
+		sz = snprintf(buf, bufsz, "%s%s", events ? sep : "", causes[i]);
+		bufsz -= sz;
+		buf += sz;
+		++events;
+	}
+	return rbuf;
+}
+
 void file_dump_node(struct node_data *d)
 {
 	int c;
@@ -177,9 +204,16 @@ void file_dump_node(struct node_data *d)
 	if (display_extra)
 		fprintf(of, "%4u,%4u,", op->freq_socs, op->freq_socn);
 	fprintf(of, "%.2f,%.2f,%.2f,%.2f,", to_v(op->v_core),
-		to_v(op->v_sram), to_v(op->v_mem), to_v(op->v_soc));
+			to_v(op->v_sram), to_v(op->v_mem), to_v(op->v_soc));
 	fprintf(of, "%.2f,%.2f,%.2f,%.2f", to_w(op->pwr_core),
-		to_w(op->pwr_sram), to_w(op->pwr_mem), to_w(op->pwr_soc));
+			to_w(op->pwr_sram), to_w(op->pwr_mem), to_w(op->pwr_soc));
+
+	if (display_throttling)
+		fprintf(of,",%5u,%5u,%5u,%5u,%5u,%5u,%5u",
+			op->active_evt,
+			op->temp_evt_cnt, op->pwr_evt_cnt,
+			op->ext_evt_cnt, op->temp_throttle_ms,
+			op->pwr_throttle_ms, op->ext_throttle_ms);
 }
 
 void screen_disp_node(struct node_data *d)
@@ -187,6 +221,7 @@ void screen_disp_node(struct node_data *d)
 	struct mc_oper_region *op = &d->buf;
 	struct term_seq *t = &term_seq;
 	int i, c, n;
+	char buf[64];
 
 	printf("Node: %d  Snapshot: %u%s", d->node, op->counter, t->nl);
 	printf("Freq (Min/Max): %u/%u MHz     Temp Thresh (Soft/Max): %6.2f/%6.2f C%s",
@@ -218,6 +253,23 @@ void screen_disp_node(struct node_data *d)
 	if (display_extra)
 		printf(", SOCS: %4d MHz, SOCN: %4d MHz", op->freq_socs, op->freq_socn);
 	printf("%s%s", t->nl, t->nl);
+
+	if (!display_throttling)
+		return;
+
+	if (d->throttling_available) {
+		printf("%s", t->nl);
+		printf("Throttling Active Events: %s%s",
+			 get_throttling_cause(op->active_evt, ",", buf, sizeof(buf)), t->nl);
+		printf("Throttle Events     Temp: %6d,    Power: %6d,    Ext: %6d%s",
+				op->temp_evt_cnt, op->pwr_evt_cnt, op->ext_evt_cnt, t->nl);
+		printf("Throttle Durations  Temp: %6d ms, Power: %6d ms, Ext: %6d ms%s",
+				op->temp_throttle_ms, op->pwr_throttle_ms,
+				op->ext_throttle_ms, t->nl);
+	} else {
+		printf("Throttling events not supported.%s", t->nl);
+	}
+	printf("%s", t->nl);
 }
 
 void dump_node(struct node_data *d)
@@ -239,8 +291,12 @@ int read_node(struct node_data *d)
 	rv = read(d->fd, op, sizeof(*op));
 	if (rv < sizeof(*op))
 		return rv;
-	if ((op->cmd_status & STATUS_READY) == 0)
+	if (CMD_STATUS_READY(op->cmd_status) == 0)
 		return 0;
+	if (CMD_VERSION(op->cmd_status) > 0)
+		d->throttling_available =  1;
+	else
+		d->throttling_available =  0;
 	return 1;
 }
 
@@ -334,7 +390,7 @@ static void handler(int sig)
 
 static void usage(const char *prog, int exit_code)
 {
-	fprintf(stderr, "Usage: %s [-hx] [-d delay] [-f csv_file]\n", prog);
+	fprintf(stderr, "Usage: %s [-hTx] [-d delay] [-f csv_file]\n", prog);
 	exit(exit_code);
 }
 
@@ -363,6 +419,12 @@ static void setup_fileout(void)
 			fprintf(of, "freq_socs%d,freq_socn%d,", n, n);
 		fprintf(of, "v_core%d,v_sram%d,v_mem%d,v_soc%d,", n, n, n, n);
 		fprintf(of, "pwr_core%d,pwr_sram%d,pwr_mem%d,pwr_soc%d", n, n, n, n);
+		if (display_throttling) {
+			fprintf(of, ",thrott_cause%d,temp_thrott_cnt%d,pwr_thrott_cnt%d,ext_thrott_cnt%d",
+				n, n, n, n);
+			fprintf(of, ",temp_thrott_dur%d,pwr_thrott_dur%d,ext_thrott_dur%d",
+				n, n, n);
+		}
 	}
 	fprintf(of, "\n");
 }
@@ -374,7 +436,7 @@ int main(int argc, char *argv[])
 	double dval;
 
 	tx2mon = malloc(sizeof(*tx2mon));
-	while ((opt = getopt(argc, argv, "f:d:hx")) != -1) {
+	while ((opt = getopt(argc, argv, "f:d:hTx")) != -1) {
 		switch (opt) {
 		case 'h':
 			usage(argv[0], 0);
@@ -393,6 +455,9 @@ int main(int argc, char *argv[])
 		case 'f':
 			out_filename = strdup(optarg);
 			interactive = 0;
+			break;
+		case 'T':
+			display_throttling = 0;
 			break;
 		case 'x':
 			display_extra = 1;

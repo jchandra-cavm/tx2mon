@@ -7,7 +7,8 @@
 #define MAX_CPUS_PER_SOC	32
 
 /* for cmd_status below */
-#define STATUS_READY		(1U << 1)
+#define CMD_STATUS_READY(cmd)	(((cmd) >> 1 ) & 1)
+#define CMD_VERSION(cmd)	(((cmd) >> 24) & 0xff)
 
 /* MC val to celsius */
 #define to_c(val)	((446.18 + 7.92) - ((val) * 0.5582))
@@ -45,6 +46,19 @@ struct mc_oper_region
     uint32_t	resv6;
     uint32_t	resv7;
     uint32_t	resv8;
+    uint32_t	resv9;
+    uint32_t	resv10;
+    uint32_t	resv11;
+    uint32_t	resv12;
+    uint32_t	resv13;
+    uint32_t	resv14;
+    uint32_t 	active_evt;
+    uint32_t 	temp_evt_cnt;
+    uint32_t 	pwr_evt_cnt;
+    uint32_t 	ext_evt_cnt;
+    uint32_t 	temp_throttle_ms;
+    uint32_t 	pwr_throttle_ms;
+    uint32_t 	ext_throttle_ms;
 };
 
 #endif
