@@ -11,10 +11,41 @@ that are decoded by 'tx2mon' userspace application.
 
 Usage: tx2mon [-d delay] [-f file] [-h]
 Options:
- -d delay	update delay in seconds - range [0.0001..9999]
- -f csv_file	run in non-interactive mode, save data in CSV format to
-		the file specified
- -h		display help text
- -x		display extra information (internal block freq)
+    -d delay       update delay in seconds - range [0.0001..9999]
+    -f csv_file    run in non-interactive mode, save data in CSV format to
+                   the file specified
+    -h             display help text
+    -T             do not report throttling information
+    -x             display extra information (internal block freq)
 
 You have to run the application as root.
+
+Description of fields reported by the application:
+ Freq (Min/Max)         : SoC frequency limits, these limits depend on the SKU.
+ Temp Thresh (Soft/Max) : Limits on temperature beyond which the SoC will
+                          throttle voltage and frequency down.
+ For each core          : Frequency and temperature reading.
+ SoC Center Temp        : This represents the highest temperature on the SoC.
+
+Voltage and power reported:
+        Core : Voltage and power consumed by all cores on the SoC.
+        SRAM : Voltage and power consumed by internal SRAM on the SoC.
+        Mem  : Voltage and power consumed by the LLC ring on the SoC, refer to
+               ThunderX2 HRM for details.
+        SOC  : Voltage and power consumed by misc SoC blocks.
+Memnet Freq  : Frequency used by the ring connecting the SoC, refer to ThunderX2
+               HRM for details.
+
+There is additional power consumed by cross-socket interconnect, PCIe, DDR and
+other IOs that is not currently reported by this tool.
+
+Throttling information:
+
+If the tool is run on a platform that new extended management controller
+operating region, it will report the following fields as well.
+
+Throttling Active Events: list of active conditions that is causing throttling.
+Throttle Events  and Throttle Durations:
+         Temp:          count of temperature events, and total duration in ms.
+         Power:         count of power events, and total duration in ms.
+         External:      count of external events, and total duration in ms.

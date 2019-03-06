@@ -169,7 +169,7 @@ static int init_socinfo(void)
 static char *get_throttling_cause(unsigned int active_event, const char *sep, char *buf,
 		int bufsz)
 {
-	const char *causes[] = { "Temp", "Power", "Ext", "Unk3", "Unk4", "Unk5"};
+	const char *causes[] = { "Temperature", "Power", "External", "Unk3", "Unk4", "Unk5"};
 	const int ncauses = sizeof(causes)/sizeof(causes[0]);
 	int i, sz, events;
 	char *rbuf;
@@ -261,9 +261,9 @@ void screen_disp_node(struct node_data *d)
 		printf("%s", t->nl);
 		printf("Throttling Active Events: %s%s",
 			 get_throttling_cause(op->active_evt, ",", buf, sizeof(buf)), t->nl);
-		printf("Throttle Events     Temp: %6d,    Power: %6d,    Ext: %6d%s",
+		printf("Throttle Events     Temp: %6d,    Power: %6d,    External: %6d%s",
 				op->temp_evt_cnt, op->pwr_evt_cnt, op->ext_evt_cnt, t->nl);
-		printf("Throttle Durations  Temp: %6d ms, Power: %6d ms, Ext: %6d ms%s",
+		printf("Throttle Durations  Temp: %6d ms, Power: %6d ms, External: %6d ms%s",
 				op->temp_throttle_ms, op->pwr_throttle_ms,
 				op->ext_throttle_ms, t->nl);
 	} else {
