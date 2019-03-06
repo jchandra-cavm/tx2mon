@@ -17,6 +17,11 @@
 
 #include "mc_oper_region.h"
 
+/* Handle older linux headers */
+#ifndef SMCCC_RET_SUCCESS
+#define SMCCC_RET_SUCCESS	0
+#endif
+
 #define VERSION_MAJOR_NUM	1
 #define VERSION_MINOR_NUM	4
 #define CORES_PER_ROW		4
@@ -28,6 +33,7 @@
 
 static struct termios *ts_saved;
 static int interactive = 1;
+static int display_extra = 0;
 static char *out_filename;
 static struct timeval delay = { .tv_sec = 1 };
 
@@ -146,7 +152,8 @@ static int init_socinfo(void)
 		return -EBADF;
 	close(fd);
 	free(path);
-	printf("Read nodes = %d from socinfo\n", nodes);
+	printf("Read nodes = %d cores = %d threads = %d from socinfo\n",
+			nodes, cores, threads);
 	tx2mon->nodes = nodes;
 	tx2mon->node[0].node = 0;
 	tx2mon->node[0].cores = cores;
@@ -163,11 +170,12 @@ void file_dump_node(struct node_data *d)
 	FILE *of = tx2mon->fileout;
 	struct mc_oper_region *op = &d->buf;
 
-	for (c = 0; c < MAX_CPUS_PER_SOC; c++)
+	for (c = 0; c < d->cores; c++)
 		fprintf(of, "%.2f,%4u,", cpu_temp(d, c), cpu_freq(d, c));
 	fprintf(of, "%.2f,", to_c(op->tmon_soc_avg));
-	fprintf(of, "%4u,%4u,%4u,", op->freq_mem_net, op->freq_socs,
-		op->freq_socn);
+	fprintf(of, "%4u,", op->freq_mem_net);
+	if (display_extra)
+		fprintf(of, "%4u,%4u,", op->freq_socs, op->freq_socn);
 	fprintf(of, "%.2f,%.2f,%.2f,%.2f,", to_v(op->v_core),
 		to_v(op->v_sram), to_v(op->v_mem), to_v(op->v_soc));
 	fprintf(of, "%.2f,%.2f,%.2f,%.2f", to_w(op->pwr_core),
@@ -206,9 +214,10 @@ void screen_disp_node(struct node_data *d)
 	printf("Power      Core: %6.2f W, SRAM: %5.2f W,  Mem: %5.2f W, SOC: %5.2f W%s",
 		to_w(op->pwr_core), to_w(op->pwr_sram), to_w(op->pwr_mem),
 		to_w(op->pwr_soc), t->nl);
-	printf("Frequency    Memnet: %4d MHz, SOCS: %4d MHz, SOCN: %4d MHz%s",
-		op->freq_mem_net, op->freq_socs, op->freq_socn, t->nl);
-	printf("%s", t->nl);
+	printf("Frequency    Memnet: %4d MHz", op->freq_mem_net);
+	if (display_extra)
+		printf(", SOCS: %4d MHz, SOCN: %4d MHz", op->freq_socs, op->freq_socn);
+	printf("%s%s", t->nl, t->nl);
 }
 
 void dump_node(struct node_data *d)
@@ -325,7 +334,7 @@ static void handler(int sig)
 
 static void usage(const char *prog, int exit_code)
 {
-	fprintf(stderr, "Usage: %s [-h] [-d delay] [-f csv_file]\n", prog);
+	fprintf(stderr, "Usage: %s [-hx] [-d delay] [-f csv_file]\n", prog);
 	exit(exit_code);
 }
 
@@ -349,7 +358,9 @@ static void setup_fileout(void)
 		for (c = 0; c < nd->cores; c++)
 			fprintf(of, "cpu_temp%dc%d,cpu_freq%dc%d,", n, c, n, c);
 		fprintf(of, "tmon_soc_avg%d,", n);
-		fprintf(of, "freq_mem_net%d,freq_socs%d,freq_socn%d,", n, n, n);
+		fprintf(of, "freq_mem_net%d,", n);
+		if (display_extra)
+			fprintf(of, "freq_socs%d,freq_socn%d,", n, n);
 		fprintf(of, "v_core%d,v_sram%d,v_mem%d,v_soc%d,", n, n, n, n);
 		fprintf(of, "pwr_core%d,pwr_sram%d,pwr_mem%d,pwr_soc%d", n, n, n, n);
 	}
@@ -363,7 +374,7 @@ int main(int argc, char *argv[])
 	double dval;
 
 	tx2mon = malloc(sizeof(*tx2mon));
-	while ((opt = getopt(argc, argv, "f:d:h")) != -1) {
+	while ((opt = getopt(argc, argv, "f:d:hx")) != -1) {
 		switch (opt) {
 		case 'h':
 			usage(argv[0], 0);
@@ -382,6 +393,9 @@ int main(int argc, char *argv[])
 		case 'f':
 			out_filename = strdup(optarg);
 			interactive = 0;
+			break;
+		case 'x':
+			display_extra = 1;
 			break;
 		default:
 			usage(argv[0], 1);

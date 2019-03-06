@@ -15,5 +15,6 @@ Options:
  -f csv_file	run in non-interactive mode, save data in CSV format to
 		the file specified
  -h		display help text
+ -x		display extra information (internal block freq)
 
 You have to run the application as root.
