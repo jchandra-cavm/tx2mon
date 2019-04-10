@@ -49,3 +49,14 @@ Throttle Events  and Throttle Durations:
          Temp:          count of temperature events, and total duration in ms.
          Power:         count of power events, and total duration in ms.
          External:      count of external events, and total duration in ms.
+
+Additional Notes:
+tx2mon reports on the sensors monitored by the on-chip management controller.
+Some of the on-chip components (like the various IO blocks) do not have sensors
+and therefore the voltage and power measurements of these blocks are not
+provided by tx2mon.
+
+However, if your platform has a BMC there should be additional sensors for the
+platform that are connected to the BMC. The sensor reading from the sensors
+connected to the BMC are available using ipmitool(1). The command 'ipmitool sdr'
+can be used to dump the BMC sensor information.
