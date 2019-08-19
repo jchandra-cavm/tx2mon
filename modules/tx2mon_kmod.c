@@ -15,7 +15,7 @@
 #define NODE0_MC_BASE_ADDR	0x80008000U
 #define NODE1_MC_BASE_ADDR	0x80009000U
 #define MC_MAP_SIZE		1024
-#define MC_REGION_SIZE		428
+#define MC_REGION_SIZE		512
 #define MAX_NODES		2
 
 struct tx2_node_data {
