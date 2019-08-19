@@ -16,8 +16,16 @@ root# dkms add modules/dkms.conf
 root# dkms install -m tx2mon_kmod -v 0.1
 
 If you do not use DKMS, you could call 'make' and build it using the
-standard way to build extrenal modules. The built module then can be
-loaded with insmod(8).
+standard way to build external modules.
+
+Loading the kernel module
+-------------------------
+If the module is built with dkms, use modprobe to load the module:
+
+root# modprobe tx2mon_kmod
+
+In case you use the external module build, use insmod(8) to load
+the module
 
 Building the tx2mon application
 -------------------------------
