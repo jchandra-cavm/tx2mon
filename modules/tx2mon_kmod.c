@@ -77,7 +77,7 @@ static int setup_tx2_node(struct tx2mon_data *tx2d, int node)
 	struct tx2_node_data *nd;
 
 	nd = &tx2d->node_data[node];
-	nd->mc_region = memremap(mc_bases[node], MC_MAP_SIZE, MEMREMAP_WB);
+	nd->mc_region = ioremap(mc_bases[node], MC_MAP_SIZE);
 	if (nd->mc_region == NULL)
 		return -ENODEV;
 
