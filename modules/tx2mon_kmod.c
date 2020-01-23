@@ -17,6 +17,10 @@
 #define MC_MAP_SIZE		1024
 #define MC_REGION_SIZE		512
 #define MAX_NODES		2
+/* SMC calls */
+#define THUNDERX2_SMC_CALL_ID	0xC200FF00
+#define UPDATE_CORE_MASK	0xB0C0
+#define UPDATE_CORE_FEATURE	0xB0C1
 
 struct tx2_node_data {
 	struct bin_attribute	bin_attr;
@@ -41,6 +45,83 @@ static ssize_t socinfo_show(struct device *dev,
 		tx2mon_data->num_threads);
 }
 static DEVICE_ATTR_RO(socinfo);
+
+static u64 smcc_update_core_mask(uint32_t mask)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_smc(THUNDERX2_SMC_CALL_ID,
+			UPDATE_CORE_MASK,
+			mask, 0, 0, 0, 0, 0, &res);
+	if (res.a0) {
+		printk("%s: SMC call failed \n", __func__);
+		return 1;
+	}
+	return res.a1;
+}
+
+static u64 smcc_update_core_feature_per_cpu(void)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_smc(THUNDERX2_SMC_CALL_ID,
+			UPDATE_CORE_FEATURE,
+			0, 0 , 0, 0, 0, 0, &res);
+	if (res.a0) {
+		printk("%s: SMC call failed \n", __func__);
+		return 1;
+	}
+	return res.a1;
+}
+
+static void update_core_feature_per_cpu(void *data)
+{
+	u64 retval;
+
+	if (read_cpuid_mpidr() & 0xff)
+		return;
+	retval = smcc_update_core_feature_per_cpu();
+	if (!retval) {
+		printk("SMC Call failed on CPU %d\n", get_cpu());
+		return;
+	}
+}
+
+static void update_core_feature(void)
+{
+	int cpu;
+	int err;
+
+	for_each_online_cpu(cpu) {
+		err = smp_call_function_single( cpu,
+				update_core_feature_per_cpu,
+				NULL, 1);
+	}
+}
+
+static ssize_t core_mask_show(struct device *dev,
+			struct device_attribute *attr,
+			char *buf)
+{
+        return sprintf(buf, "0x%08x\n", (u32)smcc_update_core_mask(0xFFFF));
+}
+
+static ssize_t core_mask_store(struct device *dev,
+			struct device_attribute *attr,
+			const char *buf, size_t count)
+{
+	/* read from psci and set */
+	unsigned long mask;
+
+	if (kstrtoul(buf, 0, &mask) < 0)
+		return -EINVAL;
+	smcc_update_core_mask(mask);
+	update_core_feature();
+
+	return count;
+}
+
+static DEVICE_ATTR_RW(core_mask);
 
 static void get_tx2_info(struct tx2mon_data *tx2d)
 {
@@ -132,6 +213,12 @@ static int __init socmon_init(void)
 				&dev_attr_socinfo.attr);
 	if (err)
 		goto failout;
+
+	err = sysfs_create_file(&tx2mon_data->pdev->dev.kobj,
+				&dev_attr_core_mask.attr);
+	if (err)
+		goto failout;
+
 	for (i = 0; i < tx2mon_data->num_nodes; i++) {
 		err = setup_tx2_node(tx2mon_data, i);
 		if (err)
